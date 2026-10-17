@@ -1,0 +1,42 @@
+{
+  "name": "gpt-image-mcp",
+  "version": "1.0.0",
+  "description": "MCP server that generates and edits images with GPT-image-class models, for pi, Claude Code, Cursor and any MCP client",
+  "type": "module",
+  "bin": {
+    "gpt-image-mcp": "server.mjs"
+  },
+  "files": [
+    "server.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "test": "node test.mjs",
+    "check": "node server.mjs --check",
+    "draw": "node server.mjs --draw"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "image-generation",
+    "image-editing",
+    "gpt-image",
+    "openai",
+    "claude-code",
+    "cursor",
+    "ai-agents"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TypeDreamMoon/gpt-image-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/TypeDreamMoon/gpt-image-mcp/issues"
+  },
+  "homepage": "https://github.com/TypeDreamMoon/gpt-image-mcp#readme"
+}
