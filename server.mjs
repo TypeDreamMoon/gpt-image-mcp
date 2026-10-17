@@ -117,15 +117,19 @@ const MIME_BY_EXT = {
   ".gif": "image/gif",
 };
 
-function apiError(status, body) {
-  let message = body;
+function summarize(body, limit = 300) {
   try {
     const parsed = JSON.parse(body);
-    message = parsed?.error?.message ?? parsed?.message ?? body;
+    const message = parsed?.error?.message ?? parsed?.message;
+    if (typeof message === "string") return message.slice(0, limit);
   } catch {
-    /* keep raw body */
+    /* not JSON */
   }
-  return new Error(`image API responded ${status}: ${String(message).slice(0, 800)}`);
+  return String(body).replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function apiError(status, body) {
+  return new Error(`image API responded ${status}: ${summarize(body, 800)}`);
 }
 
 async function postJson(cfg, tool, payload) {
@@ -584,7 +588,7 @@ async function check() {
       console.log("\nWARN: /models is 404 (normal on some relays); image endpoint not verified");
     } else {
       const hint = body.includes("images") ? " (provider says images are unsupported)" : "";
-      console.log(`\nFAIL: /models responded ${res.status}${hint}: ${body.slice(0, 300)}`);
+      console.log(`\nFAIL: /models responded ${res.status}${hint}: ${summarize(body)}`);
       process.exit(1);
     }
   } catch (error) {
