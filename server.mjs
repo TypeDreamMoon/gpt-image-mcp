@@ -7,15 +7,15 @@
  * Requires Node >= 18 (tested on 24).
  *
  * Configure with environment variables:
- *   GPT_IMG_MCP_API_KEY      required   API key (fallback: OPENAI_API_KEY)
- *   GPT_IMG_MCP_API_KEY_FILE optional   file holding the key; wins over the var above
- *   GPT_IMG_MCP_BASE_URL     optional   default https://api.openai.com/v1
- *   GPT_IMG_MCP_MODEL        optional   default gpt-image-1
- *   GPT_IMG_MCP_OUTPUT_DIR   optional   default ./generated-images
- *   GPT_IMG_MCP_TIMEOUT_MS   optional   default 240000 (image models are slow)
- *   GPT_IMG_MCP_INLINE       optional   "0" returns file paths only, no image blocks
- *   GPT_IMG_MCP_EXTRA_JSON   optional   extra JSON merged into the request body
- *   GPT_IMG_MCP_EDIT_FIELD   optional   multipart field for edits (default: image / image[])
+ *   IMAGE_API_KEY      required   API key (fallback: OPENAI_API_KEY)
+ *   IMAGE_API_KEY_FILE optional   file holding the key; wins over the var above
+ *   IMAGE_BASE_URL     optional   default https://api.openai.com/v1
+ *   IMAGE_MODEL        optional   default gpt-image-1
+ *   IMAGE_OUTPUT_DIR   optional   default ./generated-images
+ *   IMAGE_TIMEOUT_MS   optional   default 240000 (image models are slow)
+ *   IMAGE_INLINE       optional   "0" returns file paths only, no image blocks
+ *   IMAGE_EXTRA_JSON   optional   extra JSON merged into the request body
+ *   IMAGE_EDIT_FIELD   optional   multipart field for edits (default: image / image[])
  *
  * Self test:  node server.mjs --check
  */
@@ -39,15 +39,15 @@ Usage:  node server.mjs            start the MCP server (stdio)
         node server.mjs --version  print the version
 
 Environment:
-  GPT_IMG_MCP_API_KEY       required   API key (fallback: OPENAI_API_KEY)
-  GPT_IMG_MCP_API_KEY_FILE  optional   file containing the key; wins over the vars above
-  GPT_IMG_MCP_BASE_URL      optional   default https://api.openai.com/v1
-  GPT_IMG_MCP_MODEL         optional   default gpt-image-1
-  GPT_IMG_MCP_OUTPUT_DIR    optional   default ./generated-images
-  GPT_IMG_MCP_TIMEOUT_MS    optional   default 240000
-  GPT_IMG_MCP_INLINE        optional   "0" returns file paths only, no image blocks
-  GPT_IMG_MCP_EXTRA_JSON    optional   extra JSON merged into the request body
-  GPT_IMG_MCP_EDIT_FIELD    optional   multipart field for edits (default image / image[])
+  IMAGE_API_KEY      required   API key (fallback: OPENAI_API_KEY)
+  IMAGE_API_KEY_FILE optional   file containing the key; wins over the vars above
+  IMAGE_BASE_URL     optional   default https://api.openai.com/v1
+  IMAGE_MODEL        optional   default gpt-image-1
+  IMAGE_OUTPUT_DIR   optional   default ./generated-images
+  IMAGE_TIMEOUT_MS   optional   default 240000
+  IMAGE_INLINE       optional   "0" returns file paths only, no image blocks
+  IMAGE_EXTRA_JSON   optional   extra JSON merged into the request body
+  IMAGE_EDIT_FIELD   optional   multipart field for edits (default image / image[])
 `;
 
 // ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@ function env(name, fallback) {
 }
 
 function readKeyFile() {
-  const file = env("GPT_IMG_MCP_API_KEY_FILE");
+  const file = env("IMAGE_API_KEY_FILE");
   if (!file) return undefined;
   try {
     return fs.readFileSync(file.replace(/^~(?=$|[\\/])/, process.env.HOME ?? ""), "utf8").trim();
@@ -70,21 +70,21 @@ function readKeyFile() {
 }
 
 function config() {
-  const apiKey = readKeyFile() ?? env("GPT_IMG_MCP_API_KEY") ?? env("OPENAI_API_KEY");
+  const apiKey = readKeyFile() ?? env("IMAGE_API_KEY") ?? env("OPENAI_API_KEY");
   return {
     apiKey,
-    baseUrl: env("GPT_IMG_MCP_BASE_URL", "https://api.openai.com/v1").replace(/\/+$/, ""),
-    model: env("GPT_IMG_MCP_MODEL", "gpt-image-1"),
-    outputDir: path.resolve(env("GPT_IMG_MCP_OUTPUT_DIR", path.join(process.cwd(), "generated-images"))),
-    timeoutMs: Number(env("GPT_IMG_MCP_TIMEOUT_MS", "240000")) || 240000,
-    inline: env("GPT_IMG_MCP_INLINE", "1") !== "0",
+    baseUrl: env("IMAGE_BASE_URL", "https://api.openai.com/v1").replace(/\/+$/, ""),
+    model: env("IMAGE_MODEL", "gpt-image-1"),
+    outputDir: path.resolve(env("IMAGE_OUTPUT_DIR", path.join(process.cwd(), "generated-images"))),
+    timeoutMs: Number(env("IMAGE_TIMEOUT_MS", "240000")) || 240000,
+    inline: env("IMAGE_INLINE", "1") !== "0",
     extra: parseExtra(),
-    editField: env("GPT_IMG_MCP_EDIT_FIELD"),
+    editField: env("IMAGE_EDIT_FIELD"),
   };
 }
 
 function parseExtra() {
-  const raw = env("GPT_IMG_MCP_EXTRA_JSON");
+  const raw = env("IMAGE_EXTRA_JSON");
   if (!raw) return {};
   try {
     const parsed = JSON.parse(raw);
@@ -99,7 +99,7 @@ class ConfigError extends Error {}
 function requireKey(cfg) {
   if (!cfg.apiKey) {
     throw new ConfigError(
-      "No image API key configured. Set GPT_IMG_MCP_API_KEY (or OPENAI_API_KEY) to a provider that " +
+      "No image API key configured. Set IMAGE_API_KEY (or OPENAI_API_KEY) to a provider that " +
         "supports POST {base}/images/generations — for example api.openai.com/v1. " +
         "Use `node server.mjs --check` to inspect the resolved config.",
     );
@@ -273,7 +273,7 @@ function resultContent(cfg, files, header, usage) {
     if (file.revisedPrompt) lines.push(`  revised prompt: ${file.revisedPrompt}`);
   }
   if (usage?.total_tokens !== undefined) lines.push(`tokens: ${JSON.stringify(usage)}`);
-  if (!cfg.inline) lines.push("(inline image blocks disabled by GPT_IMG_MCP_INLINE=0)");
+  if (!cfg.inline) lines.push("(inline image blocks disabled by IMAGE_INLINE=0)");
 
   const content = [{ type: "text", text: lines.join("\n") }];
   if (cfg.inline) {
@@ -574,7 +574,7 @@ async function check() {
   console.log(`output dir ${cfg.outputDir}`);
   console.log(`inline     ${cfg.inline}`);
   if (!cfg.apiKey) {
-    console.log("\nFAIL: no API key. Set GPT_IMG_MCP_API_KEY or OPENAI_API_KEY.");
+    console.log("\nFAIL: no API key. Set IMAGE_API_KEY or OPENAI_API_KEY.");
     process.exit(1);
   }
   try {
