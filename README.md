@@ -41,7 +41,7 @@ npm i -g github:TypeDreamMoon/gpt-image-mcp
 `--check` prints the resolved configuration and probes the endpoint. It costs nothing.
 
 ```bash
-export IMAGE_API_KEY=sk-...
+export GPT_IMG_MCP_API_KEY=sk-...
 node server.mjs --draw "a red fox in the snow, watercolor"   # costs one image
 ```
 
@@ -51,15 +51,15 @@ Everything is an environment variable; there are no config files.
 
 | Variable | Default | Notes |
 |---|---|---|
-| `IMAGE_API_KEY` | — | **Required.** Falls back to `OPENAI_API_KEY`, then `IMAGE_API_KEY_FILE` |
-| `IMAGE_API_KEY_FILE` | — | Path to a file containing the key; wins over the two above |
-| `IMAGE_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible base; trailing `/` stripped |
-| `IMAGE_MODEL` | `gpt-image-1` | Default model for both tools |
-| `IMAGE_OUTPUT_DIR` | `<cwd>/generated-images` | Where images are written |
-| `IMAGE_TIMEOUT_MS` | `240000` | Image models are slow; do not set this low |
-| `IMAGE_INLINE` | `1` | Set to `0` to return paths only (saves context) |
-| `IMAGE_EXTRA_JSON` | — | Extra JSON merged into the request body, for provider-specific fields |
-| `IMAGE_EDIT_FIELD` | `image` / `image[]` | Multipart field name for edits, if a relay expects something else |
+| `GPT_IMG_MCP_API_KEY` | — | **Required.** Falls back to `OPENAI_API_KEY`, then `GPT_IMG_MCP_API_KEY_FILE` |
+| `GPT_IMG_MCP_API_KEY_FILE` | — | Path to a file containing the key; wins over the two above |
+| `GPT_IMG_MCP_BASE_URL` | `https://api.openai.com/v1` | OpenAI-compatible base; trailing `/` stripped |
+| `GPT_IMG_MCP_MODEL` | `gpt-image-1` | Default model for both tools |
+| `GPT_IMG_MCP_OUTPUT_DIR` | `<cwd>/generated-images` | Where images are written |
+| `GPT_IMG_MCP_TIMEOUT_MS` | `240000` | Image models are slow; do not set this low |
+| `GPT_IMG_MCP_INLINE` | `1` | Set to `0` to return paths only (saves context) |
+| `GPT_IMG_MCP_EXTRA_JSON` | — | Extra JSON merged into the request body, for provider-specific fields |
+| `GPT_IMG_MCP_EDIT_FIELD` | `image` / `image[]` | Multipart field name for edits, if a relay expects something else |
 
 ## Client setup
 
@@ -70,12 +70,12 @@ Everything is an environment variable; there are no config files.
 ```json
 {
   "mcpServers": {
-    "gpt-image": {
+    "gpt-image-mcp": {
       "command": "node",
       "args": ["/absolute/path/to/gpt-image-mcp/server.mjs"],
       "timeout": 300,
       "exposure": "direct",
-      "env": { "IMAGE_API_KEY": "sk-...", "IMAGE_MODEL": "gpt-image-1" }
+      "env": { "GPT_IMG_MCP_API_KEY": "sk-...", "GPT_IMG_MCP_MODEL": "gpt-image-1" }
     }
   }
 }
@@ -85,13 +85,13 @@ Everything is an environment variable; there are no config files.
 - `exposure: "direct"` — declares the tools to the model up front. Use `"deferred"` to keep the tool
   list small behind `tool_search`, or omit it (default `codemode`) to reach the tools from scripts.
 
-Check it: `pi mcp list` should report `gpt-image: connected, 2 tools`.
+Check it: `pi mcp list` should report `gpt-image-mcp: connected, 2 tools`.
 
 ### Claude Code
 
 ```bash
-claude mcp add gpt-image --scope user \
-  --env IMAGE_API_KEY=sk-... --env IMAGE_MODEL=gpt-image-1 \
+claude mcp add gpt-image-mcp --scope user \
+  --env GPT_IMG_MCP_API_KEY=sk-... --env GPT_IMG_MCP_MODEL=gpt-image-1 \
   -- node /absolute/path/to/gpt-image-mcp/server.mjs
 claude mcp list
 ```
@@ -99,7 +99,7 @@ claude mcp list
 ### Cursor, Claude Desktop, Codex, anything else
 
 Use the standard `mcpServers` entry — `command`, `args`, `env` — wherever that client keeps its MCP
-configuration. Codex takes the TOML equivalent under `[mcp_servers.gpt-image]`.
+configuration. Codex takes the TOML equivalent under `[mcp_servers.gpt-image-mcp]`.
 
 ## Verify without spending money
 
@@ -116,13 +116,13 @@ passthrough, missing-key errors, provider 401s, and unknown tools. 18 checks, no
 The server needs an endpoint that implements the OpenAI images API:
 
 ```
-POST {IMAGE_BASE_URL}/images/generations   ← generate_image
-POST {IMAGE_BASE_URL}/images/edits         ← edit_image (multipart)
+POST {GPT_IMG_MCP_BASE_URL}/images/generations   ← generate_image
+POST {GPT_IMG_MCP_BASE_URL}/images/edits         ← edit_image (multipart)
 ```
 
 Official OpenAI (`gpt-image-1`, `gpt-image-1-mini`, dall-e) works out of the box. Many OpenAI-compatible
-relays also expose `/v1/images/generations`; point `IMAGE_BASE_URL` at theirs and set `IMAGE_MODEL` to
-the name they list.
+relays also expose `/v1/images/generations`; point `GPT_IMG_MCP_BASE_URL` at theirs and set
+`GPT_IMG_MCP_MODEL` to the name they list.
 
 ⚠️ Plenty of chat-only relays advertise image models in `/v1/models` but return `404` on the images
 endpoints, and some reject `image_generation` inside `/v1/responses`. Run `--check` and then `--draw`
@@ -131,12 +131,18 @@ before wiring it into an agent. A relay that only serves chat completions cannot
 ## Notes and limitations
 
 - Images are returned inline by default. A 1024×1024 PNG is roughly 1–3 MB of base64, which costs
-  context on every turn it stays in history; set `IMAGE_INLINE=0` to keep files only.
+  context on every turn it stays in history; set `GPT_IMG_MCP_INLINE=0` to keep files only.
 - No retries. Failures here are usually quota or moderation, which retrying will not fix — the
   provider's message is passed through verbatim.
 - Generated images bypass any image downscaling the harness applies to files it reads.
 - `edit_image` sends `multipart/form-data`; a few relays expect a JSON body with `images[].image_url`
   instead. That shape is not supported yet.
+
+## Naming
+
+The server identifies itself as `gpt-image-mcp` and every variable it reads is prefixed
+`GPT_IMG_MCP_`, so it can sit next to other image MCP servers without tool-name or environment
+collisions. `OPENAI_API_KEY` is still accepted as a last-resort key fallback.
 
 ## License
 

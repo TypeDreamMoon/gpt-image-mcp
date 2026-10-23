@@ -102,10 +102,10 @@ fs.writeFileSync(srcPng, Buffer.from(TINY_PNG, "base64"));
 // --- protocol + happy path -------------------------------------------------
 {
   const { child, request, errors } = mcpClient({
-    IMAGE_API_KEY: "sk-mock",
-    IMAGE_BASE_URL: `http://127.0.0.1:${port}/v1`,
-    IMAGE_MODEL: "gpt-image-test",
-    IMAGE_OUTPUT_DIR: outDir,
+    GPT_IMG_MCP_API_KEY: "sk-mock",
+    GPT_IMG_MCP_BASE_URL: `http://127.0.0.1:${port}/v1`,
+    GPT_IMG_MCP_MODEL: "gpt-image-test",
+    GPT_IMG_MCP_OUTPUT_DIR: outDir,
   });
 
   const init = await request("initialize", {
@@ -177,25 +177,25 @@ fs.writeFileSync(srcPng, Buffer.from(TINY_PNG, "base64"));
 // --- missing key ----------------------------------------------------------
 {
   const { child, request } = mcpClient({
-    IMAGE_API_KEY: "",
+    GPT_IMG_MCP_API_KEY: "",
     OPENAI_API_KEY: "",
-    IMAGE_BASE_URL: `http://127.0.0.1:${port}/v1`,
-    IMAGE_OUTPUT_DIR: outDir,
+    GPT_IMG_MCP_BASE_URL: `http://127.0.0.1:${port}/v1`,
+    GPT_IMG_MCP_OUTPUT_DIR: outDir,
   });
   await request("initialize", { protocolVersion: "2025-06-18", capabilities: {} });
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
   const res = await request("tools/call", { name: "generate_image", arguments: { prompt: "x" } });
   const text = res.result?.content?.[0]?.text ?? "";
-  check("missing key gives an actionable error", res.result?.isError === true && text.includes("IMAGE_API_KEY"));
+  check("missing key gives an actionable error", res.result?.isError === true && text.includes("GPT_IMG_MCP_API_KEY"));
   child.kill();
 }
 
 // --- provider failure -----------------------------------------------------
 {
   const { child, request } = mcpClient({
-    IMAGE_API_KEY: "sk-wrong",
-    IMAGE_BASE_URL: `http://127.0.0.1:${port}/v1`,
-    IMAGE_OUTPUT_DIR: outDir,
+    GPT_IMG_MCP_API_KEY: "sk-wrong",
+    GPT_IMG_MCP_BASE_URL: `http://127.0.0.1:${port}/v1`,
+    GPT_IMG_MCP_OUTPUT_DIR: outDir,
   });
   await request("initialize", { protocolVersion: "2025-06-18", capabilities: {} });
   child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" })}\n`);
