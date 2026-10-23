@@ -5,7 +5,7 @@
 [![node](https://img.shields.io/badge/node-%3E%3D18-brightgreen.svg)](https://nodejs.org)
 
 An [MCP](https://modelcontextprotocol.io) server that lets coding agents **draw**. It wraps an
-OpenAI-compatible `/v1/images` API and exposes it as two tools, so pi, Claude Code, Cursor, Codex,
+OpenAI-compatible `/v1/images` API and exposes it as three tools, so pi, Claude Code, Cursor, Codex,
 and anything else that speaks MCP can generate and edit images as part of a normal task.
 
 Text-only chat models cannot produce images, and most agent harnesses have no image tool. This fills
@@ -23,8 +23,9 @@ at what it made) and a file on disk (so the next turn can reference, move, or sh
 |---|---|
 | `generate_image` | Text → image. `prompt`, `size`, `quality`, `background`, `output_format`, `n`, `model`, `filename`, `output_dir` |
 | `edit_image` | Edit / restyle / extend existing images. `prompt`, `images[]`, `mask`, `size`, `quality`, `n` |
+| `list_models` | What the endpoint actually serves — `GET {base}/models`, optional `filter` substring. Marks the configured default model and passes through capabilities like `image-generation` / `image-edit`. Free, no image cost. |
 
-Both save every result to disk (`./generated-images` by default), print the paths, and attach the
+The two image tools save every result to disk (`./generated-images` by default), print the paths, and attach the
 images inline. Multiple results get `-1`, `-2` suffixes; name collisions are avoided automatically.
 `b64_json` and `url` responses are both handled, so gpt-image and dall-e style providers both work.
 
@@ -109,13 +110,15 @@ node test.mjs
 
 Runs a local mock of the OpenAI image API and drives the server over real stdio JSON-RPC: handshake,
 `tools/list`, schema shape, generation, multipart editing, file saving, `output_dir` override, usage
-passthrough, missing-key errors, provider 401s, and unknown tools. 18 checks, no network, no key.
+passthrough, `list_models` (listing, filtering, auth failure), missing-key errors, provider 401s, and
+unknown tools. 23 checks, no network, no key.
 
 ## Provider requirements
 
 The server needs an endpoint that implements the OpenAI images API:
 
 ```
+GET  {IMAGE_BASE_URL}/models               ← list_models
 POST {IMAGE_BASE_URL}/images/generations   ← generate_image
 POST {IMAGE_BASE_URL}/images/edits         ← edit_image (multipart)
 ```

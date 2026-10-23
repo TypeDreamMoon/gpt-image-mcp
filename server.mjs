@@ -24,7 +24,7 @@ import fs from "node:fs";
 import path from "node:path";
 
 const SERVER_NAME = "gpt-image-mcp";
-const SERVER_VERSION = "1.1.0";
+const SERVER_VERSION = "1.2.0";
 const SUPPORTED_PROTOCOLS = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
 const HELP = `gpt-image-mcp ${SERVER_VERSION}
@@ -143,6 +143,21 @@ async function postJson(cfg, tool, payload) {
     },
     body: JSON.stringify(payload),
     signal: AbortSignal.timeout(cfg.timeoutMs),
+  });
+  const text = await res.text();
+  if (!res.ok) throw apiError(res.status, text);
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error(`image API returned non-JSON: ${text.slice(0, 200)}`);
+  }
+}
+
+async function getJson(cfg, route, timeoutMs = 30000) {
+  const res = await fetch(`${cfg.baseUrl}/${route}`, {
+    method: "GET",
+    headers: { Authorization: `Bearer ${cfg.apiKey}`, Accept: "application/json" },
+    signal: AbortSignal.timeout(Math.min(cfg.timeoutMs, timeoutMs)),
   });
   const text = await res.text();
   if (!res.ok) throw apiError(res.status, text);
@@ -395,6 +410,24 @@ const TOOLS = [
       required: ["prompt", "images"],
     },
   },
+  {
+    name: "list_models",
+    description:
+      "List the models the configured endpoint advertises (GET {base}/models). Use it before " +
+      "generate_image or edit_image when the model name is unknown — relays often expose image " +
+      "models under names of their own. Costs nothing.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        filter: {
+          type: "string",
+          description:
+            "Only keep model ids containing this substring, case-insensitive — for example " +
+            "\"image\" to hide chat models, or \"edit\" to find edit-capable ones.",
+        },
+      },
+    },
+  },
 ];
 
 function withOutputDir(cfg, requested) {
@@ -456,10 +489,56 @@ async function callEdit(args) {
   );
 }
 
+async function callListModels(args) {
+  const cfg = config();
+  requireKey(cfg);
+  const response = await getJson(cfg, "models");
+  const items = Array.isArray(response?.data) ? response.data : [];
+  if (items.length === 0) {
+    throw new Error(
+      "endpoint returned no models" +
+        (response?.error?.message ? `: ${response.error.message}` : " (is {base}/models implemented?)"),
+    );
+  }
+
+  const filter = typeof args.filter === "string" ? args.filter.trim().toLowerCase() : "";
+  const models = items
+    .map((item) => (typeof item === "string" ? { id: item } : item))
+    .filter((item) => typeof item?.id === "string" && (!filter || item.id.toLowerCase().includes(filter)))
+    .map((item) => ({
+      id: item.id,
+      capabilities: Array.isArray(item.supported_endpoint_types) ? item.supported_endpoint_types : undefined,
+      ownedBy: typeof item.owned_by === "string" ? item.owned_by : undefined,
+    }));
+
+  const lines = [
+    `${models.length}${filter ? ` matching \"${filter}\"` : ""} of ${items.length} model${items.length === 1 ? "" : "s"} at ${cfg.baseUrl}`,
+    `default model: ${cfg.model}${models.some((m) => m.id === cfg.model) ? "" : " (not advertised by this endpoint)"}`,
+  ];
+  for (const model of models) {
+    const marks = [];
+    if (model.id === cfg.model) marks.push("default");
+    if (model.capabilities) marks.push(model.capabilities.join("/"));
+    lines.push(`- ${model.id}${marks.length ? ` (${marks.join(", ")})` : ""}`);
+  }
+  if (models.length === 0) lines.push("(nothing matched; drop the filter to see everything)");
+
+  return {
+    content: [{ type: "text", text: lines.join("\n") }],
+    structuredContent: {
+      baseUrl: cfg.baseUrl,
+      defaultModel: cfg.model,
+      total: items.length,
+      models,
+    },
+  };
+}
+
 async function callTool(name, args) {
   try {
     if (name === "generate_image") return await callGenerate(args ?? {});
     if (name === "edit_image") return await callEdit(args ?? {});
+    if (name === "list_models") return await callListModels(args ?? {});
     return { content: [{ type: "text", text: `unknown tool: ${name}` }], isError: true };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
@@ -496,7 +575,8 @@ async function handle(message) {
         serverInfo: { name: SERVER_NAME, version: SERVER_VERSION },
         instructions:
           "Generates and edits images through an OpenAI-compatible image API and saves them to disk. " +
-          "Prefer calling generate_image whenever the user asks for a picture, icon, or illustration.",
+          "Prefer calling generate_image whenever the user asks for a picture, icon, or illustration; " +
+          "call list_models first when the model name is unknown.",
       });
       return;
     }

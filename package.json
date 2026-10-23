@@ -1,6 +1,6 @@
 {
   "name": "gpt-image-mcp",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "MCP server that generates and edits images with GPT-image-class models, for pi, Claude Code, Cursor and any MCP client",
   "type": "module",
   "bin": {

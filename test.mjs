@@ -24,6 +24,23 @@ function mockApi() {
     req.on("data", (c) => (body += c));
     req.on("end", () => {
       const isEdit = req.url.endsWith("/images/edits");
+      if (req.url === "/v1/models") {
+        if (req.headers.authorization !== "Bearer sk-mock") {
+          res.writeHead(401, { "content-type": "application/json" });
+          return res.end(JSON.stringify({ error: { message: "bad key" } }));
+        }
+        serverChecks.push({ url: req.url, method: req.method });
+        res.writeHead(200, { "content-type": "application/json" });
+        return res.end(
+          JSON.stringify({
+            data: [
+              { id: "gpt-image-test", owned_by: "mock", supported_endpoint_types: ["image-generation", "image-edit"] },
+              { id: "gpt-image-test-mini", owned_by: "mock" },
+              { id: "chat-only", owned_by: "mock" },
+            ],
+          }),
+        );
+      }
       if (!req.url.startsWith("/v1/images/")) {
         res.writeHead(404, { "content-type": "application/json" });
         return res.end(JSON.stringify({ error: { message: "nope" } }));
@@ -120,10 +137,16 @@ fs.writeFileSync(srcPng, Buffer.from(TINY_PNG, "base64"));
 
   const list = await request("tools/list", {});
   const names = list.result.tools.map((t) => t.name);
-  check("tools/list returns generate + edit", names.includes("generate_image") && names.includes("edit_image"), names.join(","));
   check(
-    "schemas declare required prompt",
-    list.result.tools.every((t) => t.inputSchema.required.includes("prompt")),
+    "tools/list returns generate + edit + list_models",
+    names.includes("generate_image") && names.includes("edit_image") && names.includes("list_models"),
+    names.join(","),
+  );
+  check(
+    "image tools declare required prompt",
+    list.result.tools
+      .filter((t) => t.name !== "list_models")
+      .every((t) => t.inputSchema.required.includes("prompt")),
   );
 
   const gen = await request("tools/call", {
@@ -169,6 +192,25 @@ fs.writeFileSync(srcPng, Buffer.from(TINY_PNG, "base64"));
 
   const bad = await request("tools/call", { name: "nope", arguments: {} });
   check("unknown tool reports isError", bad.result?.isError === true);
+
+  const models = await request("tools/call", { name: "list_models", arguments: {} });
+  const modelText = models.result?.content?.[0]?.text ?? "";
+  check(
+    "list_models returns every advertised model",
+    models.result?.isError !== true && models.result?.structuredContent?.models?.length === 3,
+    modelText.split("\n")[0],
+  );
+  check("list_models marks the default model", modelText.includes("gpt-image-test (default"), modelText.split("\n")[1]);
+
+  const filtered = await request("tools/call", { name: "list_models", arguments: { filter: "MINI" } });
+  const filteredIds = filtered.result?.structuredContent?.models?.map((m) => m.id) ?? [];
+  check(
+    "list_models filter is case-insensitive",
+    filteredIds.length === 1 && filteredIds[0] === "gpt-image-test-mini",
+    filteredIds.join(","),
+  );
+  check("list_models calls /models with GET", serverChecks.some((c) => c.url === "/v1/models" && c.method === "GET"));
+
   check("stderr is not polluted by protocol", !errors.join("").includes("jsonrpc"));
 
   child.kill();
@@ -202,6 +244,13 @@ fs.writeFileSync(srcPng, Buffer.from(TINY_PNG, "base64"));
   const res = await request("tools/call", { name: "generate_image", arguments: { prompt: "x" } });
   const text = res.result?.content?.[0]?.text ?? "";
   check("401 surfaces as isError with status", res.result?.isError === true && text.includes("401"), text);
+  const models = await request("tools/call", { name: "list_models", arguments: {} });
+  const modelText = models.result?.content?.[0]?.text ?? "";
+  check(
+    "list_models surfaces provider 401 as isError",
+    models.result?.isError === true && modelText.includes("401"),
+    modelText,
+  );
   child.kill();
 }
 
